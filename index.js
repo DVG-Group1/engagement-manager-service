@@ -8,6 +8,7 @@ var db = pgp({
 	port: 5432, //env var: PGPORT
 });
 
+// take an object whose values are all promises, and when they're all done return a similar object whose properties are the results of those promises
 var all = ob => {
 	var keys = Object.keys(ob);
 	return Promise.all(keys.map(key => ob[key])).then(data => {
@@ -18,58 +19,64 @@ var all = ob => {
 	});
 };
 
-// server.get('/table/:table', req => {
-// 	return db.any(`SELECT * FROM ${req.params.table}`);
-// });
-
-server.get('/riskDimensions', () => {
-	return all({
-		riskDimensions: db.any('SELECT id, description FROM risk_dimensions ORDER BY ord'),
-		options: db.any('SELECT id, risk_dimension_id as parent, description, ord FROM risk_dimension_options ORDER BY ord')
-	}).then(data => {
-		return data.riskDimensions.map(r => {
-			return {
-				id: r.id,
-				description: r.description,
-				options: data.options.filter(o => o.parent === r.id)
-			};
-		});
-	});
+var initData = userID => all({
+	people: db.any(`
+		SELECT id, manager_id, first_name, last_name
+		FROM people
+		ORDER BY first_name, last_name
+	`),
+	riskDimensions: db.any(`
+		SELECT id, name, description
+		FROM risk_dimensions
+		ORDER BY ord
+	`),
+	riskOptions: db.any(`
+		SELECT id, risk_dimension_id, description
+		FROM risk_dimension_options
+		ORDER BY ord
+	`),
+	riskAssessments: db.any(`
+		SELECT id, assessee, date_added, note
+		FROM risk_assessments
+		WHERE assesser=$(userID)
+		AND date_inactive IS NULL
+		ORDER BY date_added DESC
+	`, {userID}),
+	riskRatings: db.any(`
+		SELECT risk_ratings.id, risk_dimension_id, risk_assessment_id, rating
+		FROM risk_ratings
+		INNER JOIN risk_assessments ON risk_assessments.id = risk_assessment_id
+		WHERE risk_assessments.assesser=$(userID)
+		AND risk_assessments.date_inactive IS NULL
+	`, {userID})
 });
 
-server.get('/people', () => {
-	return db.any('SELECT id, manager_id, first_name, last_name FROM people ORDER BY last_name, first_name');
-});
+// get all the things
+server.get('/init/:userID', req => initData(req.params.userID));
 
+// save a risk assessment
 server.post('/riskAssessment', req => {
 	var r = req.body;
-	var now = new Date();
 
 	return db.one(
-		'INSERT INTO risk_assessments (assessee, assesser, date_added, notes) VALUES ($1, $2, $3, $4) returning id',
-		[r.assessee, r.assesser, now, r.notes]
+		'INSERT INTO risk_assessments (assessee, assesser, date_added, note) VALUES ($1, $2, $3, $4) returning id',
+		[r.assessee, r.assesser, new Date(), r.note]
 	).then(assessment => {
 
 		console.log('Added assessment', assessment);
 
-		var answers = r.answers.map(a => {
+		var answers = Object.keys(r.answers).map(riskID => {
 			return db.one(
-				'INSERT INTO risk_ratings (date_added, rating, risk_assessment_id, risk_dimension_id) VALUES ($1, $2, $3, $4) returning id',
-				[now, a.value, assessment.id, a.id]
+				'INSERT INTO risk_ratings (rating, risk_assessment_id, risk_dimension_id) VALUES ($1, $2, $3) returning id',
+				[r.answers[riskID], assessment.id, riskID]
 			);
 		});
 
-		return Promise.all(answers);
+		return Promise.all(answers).then(() => initData(r.assesser));
 	});
 });
 
-// server.get('/columns/:table', req => {
-// 	return db.any(
-// 		'SELECT column_name, is_nullable, data_type FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2',
-// 		['public', req.params.table]
-// 	);
-// });
-
+// called in View Data. Gets data from all of these tables and their column info.
 server.get('/allData', () => {
 	var tables = ['people', 'risk_assessments', 'risk_dimension_options', 'risk_dimensions', 'risk_ratings'].map(name => {
 		return db.any(`SELECT * FROM ${name}`).then(rows => {
@@ -88,6 +95,7 @@ server.get('/allData', () => {
 	});
 });
 
+// called to save a row of a table in View Data
 server.post('/save/:table', req => {
 	var params = req.body;
 	var pairs = Object.keys(req.body).filter(
