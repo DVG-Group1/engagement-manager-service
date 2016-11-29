@@ -38,17 +38,15 @@ var initData = userID => all({
 	riskAssessments: db.any(`
 		SELECT id, assessee, date_added, note
 		FROM risk_assessments
-		WHERE assesser=$(userID)
-		AND date_inactive IS NULL
+		WHERE date_inactive IS NULL
 		ORDER BY date_added DESC
-	`, {userID}),
+	`, {userID}), // eventually we should filter these so they aren't all loaded
 	riskRatings: db.any(`
 		SELECT risk_ratings.id, risk_dimension_id, risk_assessment_id, rating
 		FROM risk_ratings
 		INNER JOIN risk_assessments ON risk_assessments.id = risk_assessment_id
-		WHERE risk_assessments.assesser=$(userID)
-		AND risk_assessments.date_inactive IS NULL
-	`, {userID})
+		WHERE risk_assessments.date_inactive IS NULL
+	`, {userID}) // eventually we should filter these so they aren't all loaded
 });
 
 // get all the things
@@ -76,38 +74,43 @@ server.post('/riskAssessment', req => {
 	});
 });
 
-// called in View Data. Gets data from all of these tables and their column info.
-server.get('/allData', () => {
-	var tables = ['people', 'risk_assessments', 'risk_dimension_options', 'risk_dimensions', 'risk_ratings'].map(name => {
-		return db.any(`SELECT * FROM ${name}`).then(rows => {
-			return {name, rows};
-		});
-	});
-
+var allData = () => {
 	return all({
-		tables: Promise.all(tables),
-		cols: db.any('SELECT table_name, column_name, is_nullable, data_type FROM information_schema.columns WHERE table_schema=$1', ['public'])
+		tables: all({
+			people: db.any('SELECT * FROM people ORDER BY first_name, last_name'),
+			risk_assessments: db.any('SELECT * FROM risk_assessments ORDER BY date_added'),
+			risk_dimension_options: db.any('SELECT * FROM risk_dimension_options ORDER BY ord'),
+			risk_dimensions: db.any('SELECT * FROM risk_dimensions ORDER BY ord'),
+			risk_ratings: db.any('SELECT * FROM risk_ratings')
+		}),
+		cols: db.any('SELECT table_name, column_name FROM information_schema.columns WHERE table_schema=$1', ['public'])
 	}).then(({tables, cols}) => {
-		return tables.map(t => {
-			t.columns = cols.filter(c => c.table_name == t.name);
-			return t;
-		});
+
+		return Object.keys(tables).reduce((res, tableName) => {
+			res[tableName] = {
+				rows: tables[tableName],
+				columns: cols.filter(c => c.table_name == tableName)
+			};
+			return res;
+		}, {});
+
 	});
-});
+};
+
+// called in View Data. Gets data from all of these tables and their column info.
+server.get('/allData', allData);
 
 // called to save a row of a table in View Data
-server.post('/save/:table', req => {
+server.post('/saveRecord', req => {
 	var params = req.body;
 	var pairs = Object.keys(req.body).filter(
-		key => key !== 'id'
+		key => key !== 'id' && key !== 'editTableName'
 	).map(key => {
 		params[key + 'col'] = key;
-		params[key] = req.body[key];
 		return `$(${key}col~)=$(${key})`;
 	});
-	params.tableToUpdate = req.params.table;
 
-	var query = 'UPDATE $(tableToUpdate~) SET ' + pairs.join(', ') + ' WHERE id=$(id)';
+	var query = `UPDATE $(editTableName~) SET ${pairs.join(', ')} WHERE id=$(id)`;
 	console.log(query, params);
-	return db.any(query, params);
+	return db.any(query, params).then(allData);
 });
