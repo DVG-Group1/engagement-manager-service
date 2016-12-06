@@ -2,14 +2,8 @@ var server = require('./js/server');
 
 var pgp = require('pg-promise')();
 var db = pgp({
-<<<<<<< Updated upstream
-	user: 'appuser', //env var: PGUSER
-	database: 'derp_db_postgres', //env var: PGDATABASE
-	password: 'appuser', //env var: PGPASSWORD
-	port: 5432, //env var: PGPORT
-=======
 	// user: 'appuser', //env var: PGUSER
-	// database: 'derp', //env var: PGDATABASE
+	// database: 'derp_db_postgres', //env var: PGDATABASE
 	// password: 'appuser', //env var: PGPASSWORD
 	// port: 5432, //env var: PGPORT
 
@@ -17,7 +11,6 @@ var db = pgp({
 	database: process.env.RDS_DB_NAME, //AWS info
 	password: process.evn.RDS_PASSWORD, //AWS info
 	port: process.env.RDS_PORT, //AWS info
->>>>>>> Stashed changes
 });
 
 // take an object whose values are all promises, and when they're all done return a similar object whose properties are the results of those promises
