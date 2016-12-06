@@ -9,7 +9,7 @@ var db = pgp({
 
 	user: process.env.RDS_USERNAME, //AWS info
 	database: process.env.RDS_DB_NAME, //AWS info
-	password: process.evn.RDS_PASSWORD, //AWS info
+	password: process.env.RDS_PASSWORD, //AWS info
 	port: process.env.RDS_PORT, //AWS info
 });
 
