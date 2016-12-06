@@ -11,6 +11,7 @@ var db = pgp({
 	database: process.env.RDS_DB_NAME, //AWS info
 	password: process.env.RDS_PASSWORD, //AWS info
 	port: process.env.RDS_PORT, //AWS info
+	host: process.env.RDS_HOSTNAME
 });
 
 // take an object whose values are all promises, and when they're all done return a similar object whose properties are the results of those promises
