@@ -5,7 +5,17 @@ app.use(require('cors')());
 app.use(require('compression')());
 app.use(require('body-parser').json());
 
-var api = {};
+// var session = require('express-session');
+// var passport = require('passport');
+// app.use(session({
+// 	secret: 'derpin\' it up!',
+// 	resave: false,
+// 	saveUninitialized: false
+// }));
+// app.use(passport.initialize());
+// app.use(passport.session());
+
+var api = {app};
 
 ['get', 'post', 'put', 'delete'].forEach(method => {
 	api[method] = (path, func) => {

@@ -3,7 +3,7 @@ var server = require('./js/server');
 var pgp = require('pg-promise')();
 var db = pgp({
 	user: 'appuser', //env var: PGUSER
-	database: 'derp', //env var: PGDATABASE
+	database: 'derp_db_postgres', //env var: PGDATABASE
 	password: 'appuser', //env var: PGPASSWORD
 	port: 5432, //env var: PGPORT
 });
@@ -19,7 +19,7 @@ var all = ob => {
 	});
 };
 
-var initData = userID => all({
+var getInitData = () => all({
 	people: db.any(`
 		SELECT id, manager_id, first_name, last_name
 		FROM people
@@ -31,34 +31,33 @@ var initData = userID => all({
 		ORDER BY ord
 	`),
 	riskOptions: db.any(`
-		SELECT id, risk_dimension_id, description
+		SELECT id, risk_dimension_id, risk_val, description
 		FROM risk_dimension_options
-		ORDER BY ord
+		ORDER BY risk_val
 	`),
 	riskAssessments: db.any(`
-		SELECT id, assessee, date_added, note
+		SELECT id, assesser_id, assessee_id, date_added, note
 		FROM risk_assessments
 		WHERE date_inactive IS NULL
 		ORDER BY date_added DESC
-	`, {userID}), // eventually we should filter these so they aren't all loaded
+	`),
 	riskRatings: db.any(`
 		SELECT risk_ratings.id, risk_dimension_id, risk_assessment_id, rating
 		FROM risk_ratings
 		INNER JOIN risk_assessments ON risk_assessments.id = risk_assessment_id
 		WHERE risk_assessments.date_inactive IS NULL
-	`, {userID}) // eventually we should filter these so they aren't all loaded
+	`)
 });
 
-// get all the things
-server.get('/init/:userID', req => initData(req.params.userID));
+server.get('/init', getInitData);
 
 // save a risk assessment
 server.post('/riskAssessment', req => {
 	var r = req.body;
 
 	return db.one(
-		'INSERT INTO risk_assessments (assessee, assesser, date_added, note) VALUES ($1, $2, $3, $4) returning id',
-		[r.assessee, r.assesser, new Date(), r.note]
+		'INSERT INTO risk_assessments (assessee_id, assesser_id, date_added, note) VALUES ($1, $2, $3, $4) returning id',
+		[r.assessee_id, r.assesser_id, new Date(), r.note]
 	).then(assessment => {
 
 		console.log('Added assessment', assessment);
@@ -70,7 +69,7 @@ server.post('/riskAssessment', req => {
 			);
 		});
 
-		return Promise.all(answers).then(() => initData(r.assesser));
+		return Promise.all(answers).then(getInitData);
 	});
 });
 
@@ -79,7 +78,7 @@ var allData = () => {
 		tables: all({
 			people: db.any('SELECT * FROM people ORDER BY first_name, last_name'),
 			risk_assessments: db.any('SELECT * FROM risk_assessments ORDER BY date_added'),
-			risk_dimension_options: db.any('SELECT * FROM risk_dimension_options ORDER BY ord'),
+			risk_dimension_options: db.any('SELECT * FROM risk_dimension_options ORDER BY risk_val'),
 			risk_dimensions: db.any('SELECT * FROM risk_dimensions ORDER BY ord'),
 			risk_ratings: db.any('SELECT * FROM risk_ratings')
 		}),
@@ -101,16 +100,49 @@ var allData = () => {
 server.get('/allData', allData);
 
 // called to save a row of a table in View Data
-server.post('/saveRecord', req => {
-	var params = req.body;
-	var pairs = Object.keys(req.body).filter(
-		key => key !== 'id' && key !== 'editTableName'
-	).map(key => {
-		params[key + 'col'] = key;
-		return `$(${key}col~)=$(${key})`;
-	});
+server.post('/saveRecord/:tableName', req => {
+	var keys = Object.keys(req.body);
 
-	var query = `UPDATE $(editTableName~) SET ${pairs.join(', ')} WHERE id=$(id)`;
+	var params = keys.reduce((res, key) => {
+		res[key] = req.body[key];
+		res[key + 'col'] = key;
+		return res;
+	}, {editTableName: req.params.tableName});
+
+	var query;
+
+	if (req.body.id){
+		var pairs = keys.filter(key => key !== 'id').map(key => `$(${key}col~)=$(${key})`);
+		query = `UPDATE $(editTableName~) SET ${pairs.join(', ')} WHERE id=$(id)`;
+	} else {
+		var cols = keys.map(key => `$(${key}col~)`);
+		var vals = keys.map(key => `$(${key})`);
+		query = `INSERT INTO $(editTableName~) (${cols.join(', ')}) VALUES (${vals.join(', ')})`;
+	}
+
 	console.log(query, params);
 	return db.any(query, params).then(allData);
 });
+
+// var passport = require('passport');
+// var LocalStrategy = require('passport-local').Strategy;
+// var strategy = new LocalStrategy((username, password, done) => {
+// 	db.one('SELECT last_name FROM people WHERE id=$(username)', {username}).then(row => {
+// 		console.log(row);
+// 		if (row){
+// 			if (row.last_name === password){
+// 				return done(null, row);
+// 			}
+// 			return done(null, false, {message: 'Incorrect password.'});
+// 		}
+// 		return done(null, false, {message: 'Username does not exist.'});
+// 	}).catch(err => {
+// 		return done(err);
+// 	});
+// });
+//
+// passport.use(strategy);
+//
+// server.app.post('/login',
+// 	passport.authenticate('local')
+// );
