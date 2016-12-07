@@ -1,17 +1,9 @@
-var server = require('./js/server');
 
-var pgp = require('pg-promise')();
-var db = pgp({
-	// user: 'appuser', //env var: PGUSER
-	// database: 'derp_db_postgres', //env var: PGDATABASE
-	// password: 'appuser', //env var: PGPASSWORD
-	// port: 5432, //env var: PGPORT
+var db = require('./js/db');
 
-	user: process.env.RDS_USERNAME, //AWS info
-	database: process.env.RDS_DB_NAME, //AWS info
-	password: process.env.RDS_PASSWORD, //AWS info
-	port: process.env.RDS_PORT, //AWS info
-	host: process.env.RDS_HOSTNAME
+var server = require('./js/server')({
+	getUserByUsername: (username) => db.any('SELECT * FROM people WHERE lower(dbs_id)=lower($(username))', {username}),
+	getUserById: (id) => db.one('SELECT * FROM people WHERE id=$(id)', {id}),
 });
 
 // take an object whose values are all promises, and when they're all done return a similar object whose properties are the results of those promises
@@ -129,26 +121,3 @@ server.post('/saveRecord/:tableName', req => {
 	console.log(query, params);
 	return db.any(query, params).then(allData);
 });
-
-// var passport = require('passport');
-// var LocalStrategy = require('passport-local').Strategy;
-// var strategy = new LocalStrategy((username, password, done) => {
-// 	db.one('SELECT last_name FROM people WHERE id=$(username)', {username}).then(row => {
-// 		console.log(row);
-// 		if (row){
-// 			if (row.last_name === password){
-// 				return done(null, row);
-// 			}
-// 			return done(null, false, {message: 'Incorrect password.'});
-// 		}
-// 		return done(null, false, {message: 'Username does not exist.'});
-// 	}).catch(err => {
-// 		return done(err);
-// 	});
-// });
-//
-// passport.use(strategy);
-//
-// server.app.post('/login',
-// 	passport.authenticate('local')
-// );
