@@ -17,9 +17,11 @@ module.exports = (app, getUserByUsername) => {
 						console.log('successful login for', username);
 						var token = jwt.sign({ username: username }, mySecret );
 						res.status(200).json(token);
+						return;
 					}
 					console.log('failed login attempt for', username);
 					res.status(401).send('Invalid Username/Password Combination.');
+					return;
 				}
 				console.log('failed login attempt for ', username);
 				res.status(401).send('Invalid Username/Password Combination.');
