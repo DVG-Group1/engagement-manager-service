@@ -1,13 +1,13 @@
 process.on('SIGINT', () => process.exit(0));
 
-module.exports = (authFuncs) => {
+
+module.exports = (getUserByUsername) => {
 	var app = require('express')();
 
 	app.use(require('cors')());
 	app.use(require('compression')());
 	app.use(require('body-parser').json());
-
-	require('./auth')(app, authFuncs);
+	require('./auth')(app, getUserByUsername);
 
 	var api = {app};
 
