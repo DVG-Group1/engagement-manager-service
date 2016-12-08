@@ -6,9 +6,9 @@ var db = pgp(process.env.RDS_USERNAME ? {
 	port: process.env.RDS_PORT, //AWS info
 	host: process.env.RDS_HOSTNAME
 } : {
-	user: 'appuser', //env var: PGUSER
+	user: 'postgres', //env var: PGUSER
 	database: 'derp_db_postgres', //env var: PGDATABASE
-	password: 'appuser', //env var: PGPASSWORD
+	password: 'postgres', //env var: PGPASSWORD
 	port: 5432
 });
 
