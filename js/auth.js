@@ -13,7 +13,10 @@ module.exports = (app, getUserByUsername) => {
 		getUserByUsername(username).then(row => {
 			if (row && row.last_name === password){
 				console.log('successful login for', username);
-				var token = jwt.sign({id: row.id,  role: row.user_role}, secret);
+				var expDate = new Date();
+				expDate.setDate(expDate.getDate() + 7);
+
+				var token = jwt.sign({id: row.id,  role: row.user_role, exp: Math.floor(expDate.getTime()/1000) }, secret);
 				res.send({token});
 			} else {
 				console.log('failed login attempt for ', username);
@@ -24,5 +27,13 @@ module.exports = (app, getUserByUsername) => {
 			res.status(500).send();
 		});
 
+	});
+
+	app.get('/refresh', (req, res) => {
+		var expDate = new Date();
+		expDate.setDate(expDate.getDate() + 7);
+
+		var token = jwt.sign({ id: req.body.id, role: req.body.user_role, exp: Math.floor(expDate.getTime()/1000) }, secret);
+		res.send({token});
 	});
 };
