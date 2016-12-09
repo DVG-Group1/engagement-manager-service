@@ -2,7 +2,7 @@
 var db = require('./js/db');
 
 var server = require('./js/server')((username) =>
-	db.any('SELECT * FROM people WHERE lower(dbs_id)=lower($(username))', {username})
+	db.any('SELECT * FROM people WHERE lower(dbs_id)=lower($(username))', {username}).then(rows => rows[0])
 );
 
 // take an object whose values are all promises, and when they're all done return a similar object whose properties are the results of those promises
